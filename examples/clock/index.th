@@ -1,0 +1,25 @@
+at => {
+
+  ~ {
+    h << $hours;
+    m << $minutes;
+    timeString = `${var d = new Date(0); d.setHours(h); d.setMinutes(m); return d.toString().split('T')[1].substring(0, 5);}`;
+    timeString $print;
+    timeString;
+  };
+
+} ($hours $minutes);
+
+plus => {
+    (min) : {1000 * 60};
+    (m) : {$num * min};
+    $el . time + m;
+    $el . time;
+} ($num);
+
+minus =>  {
+    (min) : {1000 * 60};
+    (m) : {$num * min};
+    $el . time - m;
+    $el . time;
+} ($num);

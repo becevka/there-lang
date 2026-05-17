@@ -1,0 +1,41 @@
+suite = 'Anagram';
+
+'no matches' > {
+    Anagram 'diaper' . matches [ 'hello' 'world' 'zombies' 'pants'] should eq [];
+};
+
+'detects simple anagram' > {
+     Anagram 'ant' . matches ['tan' 'stand' 'at'] should be ['tan'];
+};
+
+'does not detect false positives' >  {
+    Anagram 'galea' . matches ['eagle'] should [];
+};
+
+'detects multiple anagrams' > {
+    Anagram 'master' . matches ['stream' 'pigeon' 'maters'] should be ['stream' 'maters'];
+};
+
+'does not detect anagram subsets' >  {
+    Anagram 'good' . matches ['dog' 'goody'] should be [];
+};
+
+'detects anagram' > {
+    Anagram 'listen' . matches ['enlists' 'google' 'inlets' 'banana'] should be ['inlets'];
+};
+
+'detects multiple anagrams' > {
+    Anagram 'allergy' . matches ['gallery' 'ballerina' 'regally' 'clergy' 'largely' 'leading'] should be ['gallery' 'regally' 'largely'];
+};
+
+'detects anagrams case-insensitively' > {
+    Anagram 'Orchestra' . matches ['cashregister' 'Carthorse' 'radishes'] should be ['Carthorse'];
+};
+
+'does not detect a word as its own anagram' > {
+    Anagram 'Banana' . matches ['Banana'] should be [];
+};
+
+'matches accepts string argument' > {
+    Anagram 'ant' . matches 'tan' should ['tan'];
+};

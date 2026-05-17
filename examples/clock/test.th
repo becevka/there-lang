@@ -1,0 +1,48 @@
+suite = 'Clock';
+
+only 'prints the hour' > {
+    at 8 0 should '08:00';
+    at 9 0 should '09:00';
+};
+
+'prints past the hour' > {
+    at 11 09 should '11:09';
+    at 11 19 should '11:19';
+};
+
+'can add minutes' > {
+    at 10 0 plus 3 should be '10:03';
+};
+
+'can subtract minutes' > {
+    at 10 3 minus 3 should '10:00';
+};
+
+'can add over an hour' > {
+    at 10 0 add 61 should '11:01';
+};
+
+'can subtract over an hour' > {
+    at 10 3 remove 30 should '09:33';
+    at 10 3 remove 70 should '08:53';
+};
+
+'wraps around midnight' > {
+    at 23 59 add 2 should '00:01';
+};
+
+'wraps around midnight backwards' > {
+    at 0 3 remove 4 should '23:59';
+};
+
+'should know if it\'s equal to another clock' > {
+    (a) : {at 10 3}
+    (b) : {at 10 3}
+    a == b should 1;
+};
+
+'should know if it\'s not equal to another clock' > {
+    (a) : {at 10 3}
+    (b) : {at 10 4}
+    a == b should 0;
+};

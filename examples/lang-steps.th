@@ -1,0 +1,161 @@
+#definitions
+
+there is apple;
+apple is red;
+
+(isRed) : {apple is? red}
+'Red: ' + isRed $print;
+
+is pear;
+apple is pear;
+
+(?isPear) : {apple is? pear}
+'Pear: ' + isPear $print;
+
+apple is! pear;
+
+'Pear: ' + isPear $print;
+
+# vectors
+a is {
+    apple is red
+};
+
+b is {
+    pear is yellow
+};
+
+a; b; #calls
+
+color is {
+    $el is red
+};
+
+plum color;
+
+wrap is {
+    $el is $color #connect to parameter
+    $el $next ($fruit) $fruit
+};
+
+car wrap ($color $next $fruit) black {$el is $fruit} banana;
+
+
+print is {
+    $1 is? $2 $print
+}; #no named parameters
+
+print apple red;
+
+# value elements
+
+'hello' + ' world' $print;
+'hello' - 'l' $print;
+'hello' / 'l' $print;
+
+h is 'hello';
+'H is ' + h $print;
+(w) : { h with ' world'};
+'W is ' + w $print;
+(y) : { w without 'o'};
+'Y is ' + y $print;
+
+
+2 + 3 $print;
+5 - 1 $print;
+8 / 2 $print;
+
+d is 2;
+'D is ' + d $print;
+(s) : { d with 8};
+'S is ' + s $print;
+(t) : { s without 2};
+'T is ' + t $print;
+
+#interactive
+
+place is '';
+'Where is my money?' _ {place is $el};
+amount is 0;
+'How much money?' _ {amount is $el};
+
+place $print;
+amount $print;
+
+# functional
+
+colorCheck is {
+    (?isColor) : {$what is? $color};
+    '' + $what + ' is ' + $color + ': ' + isColor $print;
+} ($what $color);
+
+passer is {
+    $what is $color
+} ($what $color) ;
+
+locker is {
+    $what is?! $color _ {$what is $color}
+} ($what $color);
+
+swapper is {
+    $what is? $colorA _ {$what is! $colorA; $what is $colorB}
+} ($what $colorA $colorB);
+
+passer bike black;
+passer bike black;
+passer bike black; #all 3
+locker bike green;
+locker bike green;
+locker bike green; #only 1
+
+colorCheck bike black;
+colorCheck bike green;
+
+swapper bike black green; #all green
+
+colorCheck bike black;
+colorCheck bike green;
+
+# continuations
+
+(rotten) ... {
+    what << $el;
+    what is? green _ {what is! green; what is yellow};
+    what is? red _ {what is! red; what is brown};
+};
+
+grape is green;
+cherry is red;
+
+colorCheck grape green;
+colorCheck cherry red;
+
+grape is rotten;
+cherry is rotten;
+
+colorCheck grape green;
+colorCheck cherry red;
+
+# extended continuation
+
+swap is {
+    $what is? $colorA _ {$what is! $colorA; $what is $colorB}
+} ($what $colorA $colorB);
+
+(rot) ... {
+    what << $el;
+    swap $el green yellow;
+    swap $el red brown;
+};
+
+grass is green;
+berry is red;
+
+colorCheck grass green;
+colorCheck berry red;
+
+grass is rot;
+berry is rot;
+
+colorCheck grass green;
+colorCheck berry red;

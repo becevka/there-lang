@@ -1,0 +1,258 @@
+#definitions
+
+there is apple
+apple is red
+is pear
+apple has seed
+apple isnot pear
+apple is! pear
+apple is? red $print
+
+
+apple
+apple + red
+$print apple ? red
+pear
+apple . seed
+apple ! pear
+
+# blocks/vectors
+
+a is {
+    apple is red
+}
+
+b is {
+    pear is yellow
+}
+
+a; b; #calls
+
+color is {
+    $el is red
+}
+
+apple color
+
+color is {
+    $el is $color #connect to parameter
+    $next $el $color
+} ($color $next) # for color and next
+
+print is {
+    $print $1 is? $2
+} #no named parameters
+
+print apple red
+
+color is {
+    $el is? apple {
+        $el is red
+    }
+    $el is? pear {
+        $el is yellow
+    }
+}
+
+# strings
+
+'hello' + ' world'
+'hello' - 'l'
+'hello' / 'l'
+
+h is 'hello';
+(w) : { h with ' world'};
+w;
+(y) : { w without 'o'};
+y;
+
+# numbers
+
+2 + 3
+5 - 1
+8 / 3
+
+d is 2;
+(s) : { d with 8};
+s;
+(t) : { s without 2};
+t;
+
+#declarations/ continuations
+
+(apple color) ... {
+    apple is red
+}
+
+(pear color) ... { # when pear and color continue {}
+    pear is yellow
+}
+
+(* color) ... {
+    (c) : { #define c from {}
+         $el is? apple {
+            $export red
+         } or {
+            $export yellow
+         }
+    }
+    $el is c
+}
+
+(rotten) ... {
+    $el is yellow on green
+    $el is brown on red
+}
+
+apple ? red _ {
+    $print 'read apple'
+}
+
+# special block executions
+
+4 _ {
+    $print $i; #i allocates the iteration number.
+    $print $el #will be 4
+}
+
+'Enter your name' _ {
+    $print $el # will be the input
+}
+
+color is {
+    is? $apple {
+        $apple is red
+    }
+    is? $pear {
+        $pear is yellow
+    }
+}
+
+color ($apple) apple
+color ($pear) pear
+
+fn is {
+    $print $s
+}
+
+fn ($s something) pear something # pear
+
+
+#history
+
+apple repeat
+apple undo
+apple redo
+apple learn {
+    is red
+    is! red
+}
+apple forget color
+apple start test
+apple stop test
+apple forget test
+
+#extensions
+
+print is {
+    $print $1 is? $2
+}
+
+color is {
+    $el is $color
+    (next) : { $next with {
+            $print 'from ' $el
+        }
+    }
+    $el next $color
+} ($color, $next)
+
+apple color red print # 'from apple'
+
+parser is {
+    $args _ {
+        $print $el
+    }
+}
+
+parser there is completely new language
+
+extend is {
+    s is sequence $args
+    b is block s
+    v is $el with b
+    v
+}
+
+test is {
+    $print 'a'
+}
+
+(test2): {test extend $print 'b'}
+
+
+#groups/lists
+
+[1 2 4]
+
+basket is [](12 apple) # basket is list of 12 apple
+
+basket has? apple #12
+basket is? apple #0
+
+basket 1 #apple
+
+fill is {
+    g is []($amount) #if we will use type we will get all the same here
+    $amount _ {
+        g add $type with #creates new
+    }
+    g
+} ($amount, $type)
+
+(basket) : {fill 12 apple}
+
+basket is [](12, {
+    apple with
+})
+
+
+#groups/sequences
+seq is [b is 'hello'] #no type definition
+seq add 'world' # [b is 'hello' 'world']
+
+#iterators
+
+(red blue green) _ {
+    apple is $el
+}
+
+#ranges
+
+(1 .. 12) _ {
+    count + $el
+}
+
+(a .. 33 3) _ { #start end step
+    text + $el
+}
+
+#convertion
+
+a is number '12' #12
+a is string 12 #'12'
+a is element 'apple' # apple
+a is scope b #{'b':b}
+a is list b # [b]
+a is sequence [b, is, 'hello'] #[b is hello]
+a is block [b is 'hello'] #{b is 'hello'}
+a is sequence {b is 'hello'} #[b is 'hello']
+a is list {b is 'hello'} # [b, is, 'hello']
+a is list [b is 'hello'] # [b, is, 'hello']
+
+#punctuation
+
+apple is red; pear is yellow; $print? there
+
+
+

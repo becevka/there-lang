@@ -1,0 +1,173 @@
+# Old Forest: a turn-based duel, written in there's natural voice.
+#
+# Self-contained — the file's dialect and its one host-language resource
+# both ship in the `facet` block below, so:
+#   bin/there examples/promo/natural.th
+#
+# Stats are multisets: every `healthy` state is one health unit, every
+# `weak` state is one point of frailty. Mutation is just `is` / `is not`
+# from the default facet. Continuations carry the physics.
+
+```facet
+resources = {
+    # $rand N -> a number in 1..N. The template body is plain JS — the
+    # one host-language escape this file needs. `parameters`, `source`,
+    # and `there` are bound by the facet loader, same as in a JS facet
+    # config. Until a safe declarative subset lands (SPEC.md § 13.4),
+    # the template is the inline form for `resources` and `globals`.
+    rand : `${
+        var max = Number(parameters[0] && parameters[0].value());
+        return there.create('number', Math.floor(Math.random() * max) + 1);
+    }` (n)
+}
+
+phrases = {
+    # structural sugar — `does` is just `=` (a plain vector definition).
+    # Forked envs already inherit `properties` from the parent, so there
+    # is no need to globalize with `=>`.
+    '$ does $'                    : '$1 = $2'
+    'otherwise $'                 : '|| $1'
+
+    # postfix queries — `hero healthy?` is just `hero is? healthy`
+    # (= count of `healthy` states on hero). Wrapped in parens so it
+    # composes cleanly inside `+` chains and as a `_` source.
+    '$ healthy?'                  : '($1 is? healthy)'
+    '$ weak?'                     : '($1 is? weak)'
+    '$ charming?'                 : '($1 is? charming)'
+    '$ powerful?'                 : '($1 is? powerful)'
+    '$ wounded?'                  : '($1 is? wounded)'
+    '$ dying?'                    : '($1 is? dying)'
+    '$ dead?'                     : '($1 is? dead)'
+    '$ is alive'                  : '$1 is?! dead'
+
+    # storytelling action phrases — pure surface, no new behavior
+    'the hero rolls'              : 'hero rolls'
+    'the dragon rolls'            : 'dragon rolls'
+    'the wizard rolls'            : 'wizard rolls'
+    'the hero attacks the dragon' : 'hero attacking dragon'
+    'the dragon attacks the hero' : 'dragon attacking hero'
+    'the wizard heals the hero'   : 'wizard healing hero'
+    'the wizard heals the dragon' : 'wizard healing dragon'
+    'the hero bleeds'             : 'hero bleeding'
+    'the dragon bleeds'           : 'dragon bleeding'
+    'the hero recovers'           : 'hero recovering'
+    'the dragon recovers'         : 'dragon recovering'
+    'show the status'             : 'showStatus'
+}
+```
+
+# --- the cast ---
+
+there is hero;
+there is dragon;
+there is wizard;
+
+60 _ { hero   is healthy };
+60 _ { dragon is healthy };
+
+$rand 3 _ { hero   is weak };
+$rand 3 _ { hero   is charming };
+$rand 3 _ { dragon is weak };
+$rand 3 _ { dragon is charming };
+
+# --- atomic effects (continuations on a trigger state) ---
+#
+# `attacked` and `mended` are *effects*: anything that lands either of
+# them on an element gets translated into a healthy-token change. The
+# trigger state itself is cleared so it does not accumulate debris.
+
+(* attacked) ... { $el is not healthy; $el is not attacked };
+(* mended)   ... { $el is     healthy; $el is not mended  };
+
+# --- physics: threshold markers track wounded / dying / dead ---
+
+# when a `healthy` is removed, pin the marker for the band just entered
+(- * healthy) ... {
+    $el healthy? == 40 _ { $me is wounded } ($me{$el});
+    $el healthy? == 20 _ { $me is dying   } ($me{$el});
+    $el healthy? ==  0 _ { $me is dead    } ($me{$el});
+};
+
+# when a `healthy` is restored, peel the marker back off
+(+ * healthy) ... {
+    $el healthy? == 41 _ { $me is not wounded } ($me{$el});
+    $el healthy? == 21 _ { $me is not dying   } ($me{$el});
+    $el healthy? ==  1 _ { $me is not dead    } ($me{$el});
+};
+
+# --- verbs ---
+
+# roll fresh power for the turn
+rolls does {
+    $rand 10 _ { $me is powerful } ($me{$el});
+    '' + $el + ' rolled ' + $el powerful? $print;
+};
+
+# attack: every point of power lands one hit on the opponent and is
+# spent in the same step, so we leave the turn with zero left.
+attacking does {
+    $el rolls;
+    $el powerful? _ {
+        $opp is attacked;
+        $me  is not powerful;
+    } ($opp{$opp} $me{$el});
+} ($opp);
+
+healing does {
+    $el rolls;
+    $el powerful? _ {
+        $pat is mended;
+        $me  is not powerful;
+    } ($pat{$pat} $me{$el});
+} ($pat);
+
+# end-of-turn traits — applied once per turn, not per action.
+# bleeding: an alive actor takes one hit per point of `weak`. A corpse
+# does not bleed.
+bleeding does {
+    $el is alive _ {
+        $el weak? _ { $el is attacked } ($el{$el});
+    };
+};
+
+# recovering: charming pulls one healthy back per point, every turn.
+# Allowed on the fallen — that is what makes a wizard a wizard.
+recovering does {
+    $el charming? _ { $el is mended } ($el{$el});
+};
+
+showStatus does {
+    'Hero: ' + hero healthy? + ', Dragon: ' + dragon healthy? $print;
+};
+
+# --- the game loop ---
+
+playTurn does {
+    hero healthy? _ {
+        dragon healthy? _ {
+            '\nPress enter to take a turn (or type quit): ' _ {
+                $el is? 'quit' _ { 'You flee the field.' $print }
+                otherwise {
+                    the hero attacks the dragon;
+                    the dragon attacks the hero;
+                    the wizard heals the hero;
+                    the wizard heals the dragon;
+                    the hero bleeds;
+                    the dragon bleeds;
+                    the hero recovers;
+                    the dragon recovers;
+                    show the status;
+                    playTurn;
+                };
+            };
+        } otherwise { '\nThe dragon falls! Glory to the hero!' $print };
+    } otherwise { '\nYou fall to the dragon. Game over.' $print };
+};
+
+# --- go! ---
+
+'\nWelcome to the Old Forest.' $print;
+'Hero weakness: ' + hero weak? + ', charisma: ' + hero charming? $print;
+'Dragon weakness: ' + dragon weak? + ', charisma: ' + dragon charming? $print;
+show the status;
+playTurn;

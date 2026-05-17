@@ -1,0 +1,118 @@
+# Old Forest: a turn-based duel, in canonical there.
+#
+# Self-contained — the one host resource it needs ships in the facet
+# block below, so:
+#   bin/there examples/promo/canonical.th
+#
+# Same multiset model as natural.th, written without the storytelling
+# phrases. Every state count is read with `el ? name` (= element.size).
+# Mutation is `+` / `-`. Iteration is `_`. That's it.
+
+```facet
+resources = {
+    rand : `${
+        var max = Number(parameters[0] && parameters[0].value());
+        return there.create('number', Math.floor(Math.random() * max) + 1);
+    }` (n)
+}
+```
+
+# --- the cast ---
+
+there + hero;
+there + dragon;
+there + wizard;
+
+60 _ { hero   + healthy };
+60 _ { dragon + healthy };
+$rand 3 _ { hero   + weak };
+$rand 3 _ { hero   + charming };
+$rand 3 _ { dragon + weak };
+$rand 3 _ { dragon + charming };
+
+# --- atomic effects ---
+
+(* attacked) ... { $el - healthy; $el - attacked };
+(* mended)   ... { $el + healthy; $el - mended  };
+
+# --- physics: threshold markers ---
+
+(- * healthy) ... {
+    ($el ? healthy) == 40 _ { $me + wounded } ($me{$el});
+    ($el ? healthy) == 20 _ { $me + dying   } ($me{$el});
+    ($el ? healthy) ==  0 _ { $me + dead    } ($me{$el});
+};
+
+(+ * healthy) ... {
+    ($el ? healthy) == 41 _ { $me - wounded } ($me{$el});
+    ($el ? healthy) == 21 _ { $me - dying   } ($me{$el});
+    ($el ? healthy) ==  1 _ { $me - dead    } ($me{$el});
+};
+
+# --- verbs ---
+
+rolls = {
+    $rand 10 _ { $me + powerful } ($me{$el});
+    '' + $el + ' rolled ' + ($el ? powerful) $print;
+};
+
+attacking = {
+    $el rolls;
+    ($el ? powerful) _ {
+        $opp + attacked;
+        $me  - powerful;
+    } ($opp{$opp} $me{$el});
+} ($opp);
+
+healing = {
+    $el rolls;
+    ($el ? powerful) _ {
+        $pat + mended;
+        $me  - powerful;
+    } ($pat{$pat} $me{$el});
+} ($pat);
+
+bleeding = {
+    $el ?! dead _ {
+        ($el ? weak) _ { $el + attacked } ($el{$el});
+    };
+};
+
+recovering = {
+    ($el ? charming) _ { $el + mended } ($el{$el});
+};
+
+showStatus = {
+    'Hero: ' + (hero ? healthy) + ', Dragon: ' + (dragon ? healthy) $print;
+};
+
+# --- the game loop ---
+
+playTurn = {
+    (hero ? healthy) _ {
+        (dragon ? healthy) _ {
+            '\nPress enter to take a turn (or type quit): ' _ {
+                $el ? 'quit' _ { 'You flee the field.' $print } || {
+                    hero attacking dragon;
+                    dragon attacking hero;
+                    wizard healing hero;
+                    wizard healing dragon;
+                    hero bleeding;
+                    dragon bleeding;
+                    hero recovering;
+                    dragon recovering;
+                    showStatus;
+                    playTurn;
+                };
+            };
+        } || { '\nThe dragon falls! Glory to the hero!' $print };
+    } || { '\nYou fall to the dragon. Game over.' $print };
+};
+
+# --- go! ---
+
+'\nWelcome to the Old Forest.' $print;
+'Hero weakness: '   + (hero ? weak)   + ', charisma: ' + (hero ? charming)   $print;
+'Dragon weakness: ' + (dragon ? weak) + ', charisma: ' + (dragon ? charming) $print;
+showStatus;
+playTurn;
