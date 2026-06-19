@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# AST pretty-printer for there.
+# Usage: bin/therepile <file.th>
+set -e
+DIR="$(cd "$(dirname "$0")/.." && pwd)"
+exec bun run "$DIR/src/cli/there.ts" --ast "$@"

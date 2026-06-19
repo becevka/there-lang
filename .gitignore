@@ -66,6 +66,12 @@ web_modules/
 # Optional REPL history
 .node_repl_history
 
+# there REPL history
+.history
+
+# Local Claude Code settings (personal, machine-specific)
+.claude/settings.local.json
+
 # Output of 'npm pack'
 *.tgz
 

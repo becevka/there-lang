@@ -1,32 +1,37 @@
+# Anagram finder. `Anagram 'word' . matches [candidates]` returns the
+# candidates that are anagrams of the word (case-insensitive, excluding the
+# word itself). `matches` accepts a list or a single string.
+
 u @ utils;
 
-Anagram =>  {
-  matches = {
-    matchesFound = [];
-    (w) : { $words ? list _ { $words } || { [$$words] } };
-    w _ {
-      (same) : { sameWord $word $candidate == 0 } ($candidate{$el});
-      (anagram) : { isAnagram $word $candidate } ($candidate{$el});
-      same + anagram == 2 _ {matchesFound + $match} ($match{$el});
-    };
-    matchesFound
-  } ($words $$word);
+Anagram => {
+    matches = {
+        found = [];
+        cands = (list $words);
+        cands _ {
+            same = (sameWord $word $el);
+            ana = (isAnagram $word $el);
+            hit = (((same == 0) + ana) == 2);
+            hit _ { found + $el };
+        };
+        found
+    } ($words $$word);
 } ($word);
 
-sameWord =>  {
-  (a) : {lower $string};
-  (b) : {lower $candidate};
-  a == b
+sameWord => {
+    (a) : { lower $string };
+    (b) : { lower $candidate };
+    a == b
 } ($string $candidate $env{u});
 
-isAnagram =>  {
-  (a) : {normalize $string};
-  (b) : {normalize $candidate};
-  a == b
+isAnagram => {
+    (a) : { normalize $string };
+    (b) : { normalize $candidate };
+    a == b
 } ($string $candidate $env{u});
 
-normalize =>  {
-   (s) : {lower $string};
-   (t) : {tokens s};
-   sortList t
+normalize => {
+    (s) : { lower $string };
+    (t) : { tokens s };
+    sortList t
 } ($string $env{u});

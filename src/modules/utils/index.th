@@ -1,0 +1,33 @@
+# utils — string and list helpers.
+# The four host primitives ship in the inline facet block; the public
+# surface (lower / upper / tokens / sortList) is plain there.
+
+```facet
+globals = {
+    toLower : `${
+        var v = source && source.value ? source.value() : source;
+        return there.create('string', String(v).toLowerCase());
+    }`
+    toUpper : `${
+        var v = source && source.value ? source.value() : source;
+        return there.create('string', String(v).toUpperCase());
+    }`
+    toChars : `${
+        var v = source && source.value ? source.value() : source;
+        return there.create('list', String(v).split(''));
+    }`
+    sort : `${
+        var arr;
+        if (source && source.states) arr = source.states.slice();
+        else arr = String(source && source.value ? source.value() : source).split('');
+        arr = arr.map(function (x) { return x && x.value ? x.value() : x; });
+        arr.sort();
+        return there.create('list', arr);
+    }`
+}
+```
+
+lower => { $1 toLower };
+upper => { $1 toUpper };
+tokens => { $1 toChars };
+sortList => { $1 sort };

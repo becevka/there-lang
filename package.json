@@ -1,0 +1,59 @@
+{
+  "name": "there-lang",
+  "version": "0.1.0",
+  "description": "A small language where the program reads like sentences, effects are first-class, and the grammar itself is something you write.",
+  "module": "src/cli/there.ts",
+  "type": "module",
+  "license": "MIT",
+  "author": "Wolfgang Basyuk <becevka@kucoe.net>",
+  "contributors": [
+    "Wolfgang Basyuk <becevka@kucoe.net> (original implementation, 2015)",
+    "Claude (Anthropic) (2026 reimplementation from PROMO.md, SPEC.md, REIMPLEMENTATION.md)"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/becevka/there-lang.git"
+  },
+  "homepage": "https://github.com/becevka/there-lang#readme",
+  "bugs": {
+    "url": "https://github.com/becevka/there-lang/issues"
+  },
+  "keywords": [
+    "language",
+    "dsl",
+    "interpreter",
+    "effects",
+    "multiset",
+    "continuations",
+    "facets",
+    "phrases",
+    "reactive",
+    "configuration",
+    "rule-engine",
+    "bun"
+  ],
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "files": [
+    "bin",
+    "src",
+    "examples",
+    "PROMO.md",
+    "SPEC.md",
+    "REIMPLEMENTATION.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "there": "bin/there"
+  },
+  "scripts": {
+    "there": "bun run src/cli/there.ts",
+    "test": "bun test",
+    "prepublishOnly": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14"
+  }
+}

@@ -105,8 +105,21 @@ Default facet phrases:
 "$ is an $"                           → "$1 + $2"
 "$ is the $"                          → "$1 + $2"
 "$ or $"                              → "$1 || $2"
-"when $ is $ they become $"           → "$1, $2 .. { $el is $3 }"
+"when $ is $ they become $"           → "($1 $2) ... { $el is $3 }"
 ```
+
+The `when … is … they become …` phrase is configuration-as-code: it expands
+to a continuation declaration, so `when apple is rotten they become brown`
+registers the rule "whenever `apple` gains the `rotten` effect, give it the
+`brown` state." (The replacement shape was revised from an earlier sketch to
+a real `...` continuation; the original `$1, $2 .. { … }` form never had a
+working meaning.)
+
+Note a deliberate sharp edge: because phrase patterns are matched **after**
+alias rewriting, `is` and `+` are indistinguishable to the matcher (both are
+`+`). The article phrases (`$ is a $`, `$ is an $`, `$ is the $`) therefore
+also match `X + a Y` / `X + an Y` / `X + the Y`. Avoid using `a`, `an`, or
+`the` as variable names immediately after `+` if these phrases are active.
 
 Phrases are applied left-to-right across the full top-level token list. Each successful match advances past the replacement; on a partial mismatch, the cursor backs up to the token after the start of the failed attempt and restarts. Phrases do **not** apply inside unparsed block bodies — they only run on sequences that are actually parsed.
 
@@ -288,23 +301,53 @@ The chain works because `_` tags its produced env with `_ft = true` to signal "I
 
 ### 4.11 `=` and `=>` assignment
 
-`=` (also `let X be Y`, `X to be Y`) assigns. Default-facet behavior in `lib/integ/config.js`:
-- If the RHS is callable (function) or wraps one (`p.value` is a function), and the LHS has no `val`/states yet, build a `vector` whose `val` is the function and store it under `source.type` in `there.properties` (i.e., introduce the name).
-- Otherwise unwrap RHS via `p.value(true)` and store.
-- If LHS already has a value or states, the assignment is a no-op and a warning is emitted via `there.out('Assignment for X is ignored', 1)`.
+`=` (also `let X be Y`, `X to be Y`) binds a name. The LHS identifier is the
+source-text word, captured *before* the RHS is evaluated (evaluating the RHS
+would otherwise clobber the "last word" tracker). Behavior:
 
-`=>` (alias of `global`) does the same as `=` and additionally calls `there.globalize(name, value)` so the name appears in the facet's `globals` map (visible everywhere thereafter).
+- The RHS is unwrapped (sequences) and, if it is a raw primitive, wrapped in
+  the matching element (so `name = (a % b)` holds a `number`, not a bare JS
+  value, and can later carry `~` / states).
+- If the RHS is a vector with the default type `vector`, it is renamed to the
+  bound name (so the vector's `type` is its identifier — used by continuations
+  and the history frame stack).
+- **Scoping.** If the name is already an *own* property of the current env and
+  holds a real value, the assignment is a no-op and a warning is emitted via
+  `there.out('Assignment for X is ignored', 1)`. Otherwise the value is bound
+  in the current env — which means a name inherited from an ancestor env is
+  *shadowed* locally, giving vector bodies real local variables.
+
+The `+` operator also introduces names: `name is <value>` on a fresh,
+stateless element binds the value to the name when the value is "bindable"
+(a vector, string, number, list, table, or non-root env). This is why the
+examples define everything with `is` (`color is { … }`, `h is 'hello'`).
+Element-valued params still push states (`apple is red`).
+
+`=>` (alias of `global`) does the same as `=` and additionally calls
+`there.globalize(name, value)` so the name appears in the env-root `there`'s
+`globals` map. Globals resolve against the env chain's root first (so a
+module's vectors see the module's own globals), then the ambient evaluator
+`there` as a fallback (so a body running inside another module via `$env{m}`
+can still reach the globals from where it was defined).
 
 ### 4.12 Modules: `@` `<<` `>>`
 
-- `source @ moduleName` (alias `require`) — loads `moduleName` from `dir/moduleName/` or `<runtime>/modules_there/moduleName/`. Returns the loaded module's `there`. Stored under `moduleName` (or whatever name was provided) in the calling env's `properties`. The module's `index.th` is evaluated once with its own facet.
+- `source @ moduleName` (alias `require`) — loads `moduleName`. Resolution
+  order: relative to the requiring program's directory (a `moduleName/`
+  directory with an `index.th`, or a `moduleName.th` file), then the runtime's
+  built-in `src/modules/` directory. Returns the loaded module's `there`,
+  cached per absolute path (loaded once per process). Stored under
+  `moduleName` (or the name on the left of `@`) in the calling env's
+  `properties`. The module runs in its own `there` sharing the parent's IO.
 - `name <<` — alias `import`. Three modes:
   1. With no name (or `name == this.type`): pull all `argNames`/`args` from `resources` into `properties`. Used to "open" a vector's arguments into the local scope.
   2. `name <<` — walks `parent` chain looking for a property named `name`, falling back to `resources[name]` (by `_name` then by checkType); copies into `properties[name]`.
   3. `name << other` — same as case 2 but renames.
 - `name >>` — alias `export`. With no second arg, push `el.extend()` onto the env's `returns` array. With a second arg, push under that name into the *parent* env's `properties`.
 
-Multi-return: when a block produces multiple `>>` calls without names, all extends are returned as a JS array. Callers unwrap via `value()` returning the array.
+Multi-return: when a block produces multiple `>>` calls without names, all
+exports are returned as a `list` the caller can index (`gen * 0`) or iterate;
+a single export is returned bare.
 
 ### 4.13 Constructors (`:`)
 
@@ -316,17 +359,32 @@ Multi-return: when a block produces multiple `>>` calls without names, all exten
 
 Known modes:
 - `auto-read` — when reading an unknown `$name` resource, allocate a positional resource `$1`, `$2`, … from `resources` automatically. Used so that `mode auto-read on; a = { book is $color }; a red green` works.
-- `history` — if set, the vector dispatch consults `facet.history` (see 4.15) before invocation, accumulating introductions/reductions and applying them lazily on `?`/`print` inspections. By default this mode is *off*.
+- `history` — when on, `+` and `-` effects on typed elements are journaled so they can be replayed and reverted (see 4.15). By default this mode is *off*.
 
 ### 4.15 History
 
-`lib/integ/config.js` constructs `config.history`. The mechanism:
-- On a `+` call when source is a typed element (not a value type, and the param is not a function or a value), record `(source.type, param)` in `addition`.
-- On a `-` call similarly, record into `reduction`.
-- Install a `beforeEval` on the source that, when called, applies all pending additions/reductions, then clears them.
-- On `?`, `?!`, `print`, `print?`, `error` calls, call `apply(source)` (which fires `beforeEval` via `is`/`not` operations) before delegating to the operator.
+When `mode history on` is set, every `+` / `-` effect on a *typed* element
+(not a value type; param not a vector/table/env) is appended to a per-element
+journal. Each entry records the op (`+`/`-`), the state name, a *group* id (a
+monotonic sequence number — one root operation is one group), and *tags*: the
+names of the vector bodies executing at the time (the history frame stack)
+plus any sessions opened with `start`. The journal has a cursor: entries
+before it are *applied*, entries after it are the *redo tail*.
 
-Reset on each top-level `eval` call (`reload()`), unless `skipHistoryReload` is true.
+History commands operate on the source element and never record themselves:
+
+| Command | Effect |
+|---------|--------|
+| `el repeat` | re-apply the most recent group (as a new group) |
+| `el undo` | revert the most recent applied group, moving the cursor back |
+| `el redo` | re-apply the most recently undone group |
+| `el learn { … }` | run the block on `el`, journaling all its effects as ONE group tagged with the block's name (or `lesson`) |
+| `el start name` | begin tagging subsequent effects on `el` with `name` |
+| `el stop name` | stop tagging with `name` |
+| `el forget name` | revert and erase every journal entry tagged `name` |
+
+Reverting applies the inverse op (`+`→`-`, `-`→`+`); a fresh effect truncates
+the redo tail. With history off, the commands are no-ops on an empty journal.
 
 ### 4.16 Resources
 
@@ -408,7 +466,13 @@ Notes:
 
 ### 5.1 Template interpolation
 
-`` `…${ JS-block }…` `` — the template's interior is re-parsed; tokens are emitted verbatim, but each `resource`-followed-by-`block` becomes a JS function `new Function(args, '"use strict";' + block.value).apply(properties, valuesArray)` where `args` and values come from the enclosing `there.properties`. The result is concatenated with single-space joins between tokens. (Note: the reference logs `console.log(obj)` from inside `interpolate` — that is incidental.) Used for things like `` `${a + 3}` ``.
+`` `…${ JS-expr-or-body }…` `` — each `${ … }` is evaluated as host
+JavaScript with the enclosing env's properties available as locals (values
+unwrapped: numbers/strings to their primitive, lists to their array). A
+fragment containing a `return` or multiple statements is used as a function
+body verbatim; a bare expression (`${a + 3}`) is wrapped so it returns its
+value. Errors are swallowed to `''`. Literal text outside `${ }` is emitted
+verbatim with the usual `\n` / `\t` / `` \` `` escapes.
 
 ### 5.2 Default-input fallback
 
@@ -447,9 +511,32 @@ mode                         → enable/disable a mode
 _   each                     → iteration (see 4.8)
 ||  else                     → else-chain (see 4.9)
 ~   val                      → value vector (see 4.10)
+repeat undo redo learn       → history commands (see 4.15; arity 0 except
+forget start stop               learn/forget/start/stop)
+number string element list   → type conversions (see 6.1)
+sequence block scope
 ```
 
 Resources: `$print`, `$print?`, `$error`, `$time` (see 4.16).
+
+### 6.1 Type conversions
+
+Each conversion global takes one value-shaped argument and returns a new value
+of the target type. They are **value-only**: a bare type word that follows an
+operator stays a probe rather than being consumed as an argument, so
+`$words ? list` reads "how many in `$words`", not "convert `list`". Called with
+no value argument, a conversion returns an element named after the type (so
+the type name itself is a usable token).
+
+| Global | From → To |
+|--------|-----------|
+| `number v` | coerce to a `number` (`number '12'` → 12) |
+| `string v` | coerce to a `string` (`string 12` → `'12'`; renders a lazy `~` value) |
+| `element v` | an element named after the value (`element 'apple'`) |
+| `list v` | a `list`: copy a list, rows of a table, items of a sequence/block, or wrap a single value (`list 'x'` → `['x']`) |
+| `sequence v` | a sequence of tokens from a list / block / value |
+| `block v` | a runnable block (vector) from a list / sequence / value — string items become bare code tokens, so `block ['plum' '+' 'red']` runs `plum + red` |
+| `scope v` | an env holding the value under its type name |
 
 A `history` object is installed on the facet; used only if the `history` mode is on.
 
@@ -575,7 +662,7 @@ f 5 4;                   # 9
 
 # 10. Multi-return
 gen = { a = 12; b = 10; a >>; b >>; };
-gen;                     # returns [extend(12), extend(10)] as JS array
+gen;                     # returns a list [12, 10] (index with gen * 0)
 
 # 11. Template
 a = 12; b = `${a + 3}`;  # b is "15"
@@ -591,76 +678,67 @@ t * ["a"];              # [["a",1]]
 
 ---
 
-## 13. Proposed Extension: Inline Phrasebooks (not yet implemented)
+## 13. Inline facet blocks
 
-A facet today lives in `config.js` and ships its aliases/phrases/resources/globals via JavaScript. That works, but it splits the *grammar* of a program from the program text. A frequent pattern is "a `.th` file plus a tiny `config.js` next to it that exists only to declare four phrases" — and re-running with the right facet on the command line is the user's job.
-
-This section proposes a syntax for embedding a phrasebook inside the `.th` file itself, so a single source can carry its own dialect.
+A program can carry its own dialect and its own host pieces inline, so a
+single `.th` file is self-contained — no sidecar `config.js`, no facet path on
+the command line. This is the canonical surface (see `examples/promo/`).
 
 ### 13.1 Syntax
 
-A phrasebook block is delimited by `…phrases` (three Unicode middle-dots) on its own line, then a series of `'pattern' : 'replacement'` lines, then `…` to close. The block may appear anywhere a statement is valid, but must precede any code that relies on the phrases it defines.
+A facet block is a fenced region opened by ` ```facet ` on its own and closed
+by ` ``` `. Inside, one or more of the four facet tables are declared with
+ordinary there-flavored assignment — `key = { … }` — using string literals
+for phrases/aliases and template literals for host-coded resources/globals:
 
 ```
-…phrases
-'$ has $ $'    : '$2 _ { $1 has $3 }'
-'$ has $'      : '$1 + $2'
-'$ does $'     : '$1 => $2'
-'the hero attacks the dragon' : 'hero attacking dragon'
-…
-
-# the rest of the program parses with these phrases active
-there is hero;
-hero has 60 health;
-the hero attacks the dragon;
+```facet
+phrases = {
+    '$ does $'  : '$1 = $2'
+    'the hero attacks the dragon' : 'hero attacking dragon'
+}
+aliases = {
+    'add'    : 'plus'
+}
+resources = {
+    rand : `${
+        var max = Number(parameters[0] && parameters[0].value());
+        return there.create('number', Math.floor(Math.random() * max) + 1);
+    }` (n)
+}
+globals = {
+    toLower : `${ return there.create('string', String(source.value()).toLowerCase()); }`
+}
+```
 ```
 
-ASCII alternative: `...phrases` / `...` is accepted for editors that don't make `…` convenient. The parser treats `…` and `...` as equivalent at the start of the block.
+- `phrases` / `aliases` are `'pattern' : 'replacement'` string pairs.
+- `resources` / `globals` are `name : \`${ …JS body… }\` (params)` entries.
+  The JS body sees `parameters`, `source`, `there`, `env`; its arity is the
+  number of `(params)` names. A `globals` entry is callable as an operator
+  word; a `resources` entry is referenced as `$name`.
 
 ### 13.2 Semantics
 
-- The block is read at parse time, *before* the rest of the file is tokenized.
-- Each entry adds (or overrides) an entry in the active facet's `phrases` table for the duration of the parse.
-- Phrase precedence inside the file follows insertion order: entries from the inline block are appended after any facet-shipped phrases, so they can be ordered to override or refine.
-- After parsing finishes, the inline-declared phrases are discarded — they do not leak into module loads. A module that wants the same phrases declares its own.
-- Inline declarations may be nested inside a `…facet` block (see 13.4) if the user wants to scope aliases, resources, or globals together. For phrases alone, the `…phrases` form is enough.
+- Facet blocks are extracted textually at parse time, before tokenizing the
+  body, and stripped from the source so they leave no runtime trace.
+- `phrases` / `aliases` are merged onto a copy of the active facet (inline
+  entries appended after, so they refine or override) and used to parse the
+  rest of that file only.
+- `resources` / `globals` are compiled to host functions and installed on the
+  file's `there` (globals also into its `globals` map).
+- Nothing leaks into modules loaded via `@`: a module declares its own facet
+  block. Multiple facet blocks merge in order.
 
-### 13.3 Parser changes required
+### 13.3 Host-code trust
 
-The current parser (`lib/parse.js`) reads the program as a single token stream and applies `applyPhrases` once at the top level. Supporting inline phrasebooks requires:
-
-1. A pre-pass that scans for `…phrases` / `…` markers and extracts their contents *before* `parseNext` runs over the body. Marker detection is purely textual at this stage — no aliases or phrases are applied to the marker line itself.
-2. For each phrasebook block, parse the entries as `{ pattern: string, replacement: string }` pairs. Reject malformed entries with a parse error pointing at the line.
-3. Merge the extracted entries into a copy of the facet's `phrases` (do not mutate the facet itself — facet entries are shared across files).
-4. Run `applyPhrases` on the rest of the file using the merged phrasebook.
-5. Strip the `…phrases` blocks from the token stream so they leave no runtime trace.
-
-If the file has multiple `…phrases` blocks, they should be merged in order (later blocks override earlier on the same pattern). For simplicity, the first implementation may require all blocks to appear at the *top* of the file before any executable statement.
-
-### 13.4 Optional generalization: `…facet`
-
-The same mechanism can carry every facet table, not just phrases:
-
-```
-…facet
-phrases:
-  '$ has $' : '$1 + $2'
-aliases:
-  'foo' : 'bar'
-resources:
-  rand: { /* JS body — rejected unless `--trust` is passed */ }
-…
-```
-
-Resources and globals require host-language code, which is the awkward part — embedding raw JS in a `.th` file is a security and portability concern. A safe subset would allow only declarative entries (phrases, aliases, and resource references to facets already on disk). The `…phrases` block is the conservative MVP; `…facet` is a fuller version for follow-up work.
-
-### 13.5 Tests to add
-
-- Round-trip: a `.th` file with a `…phrases` block parses identically to the same program loaded with an external facet that declares the same phrases.
-- Override: a phrase pattern declared in `…phrases` overrides a same-pattern entry in the loaded facet.
-- Scope: a module loaded via `@` from inside a file with `…phrases` does *not* inherit the inline phrases.
-- Position: a phrase reference *before* its `…phrases` declaration is a parse error (or a no-op, depending on the chosen rule — pick one and lock it).
-- ASCII parity: `...phrases` and `…phrases` are interchangeable.
+`resources` / `globals` bodies are raw host JavaScript run via `new
+Function`. That is an intentional escape hatch (the only host code most
+programs need is a one-line `$rand`), but it means running an untrusted `.th`
+file with facet blocks is equivalent to running untrusted JS. A safe
+declarative subset (phrase/alias-only, or resources that merely reference
+facets already on disk) is the natural future hardening; today the full power
+is available without a trust gate.
 
 ---
 
@@ -670,16 +748,18 @@ A reimplementation is done when it can:
 
 1. Tokenize all token types in 3.2 and apply lazy compound parsing.
 2. Apply facet aliases at tokenization time and facet phrases over the linear token stream (including `$N` substitution and the rewinding semantics).
-3. Construct the `there` env with `out` / `ask` / `interaction` / `globalize` / `dir` / `file` / `close`.
+3. Construct the `there` env with `out` / `ask` / `globalize` / `create` and a module `baseDir`.
 4. Implement all runtime types (element, string, number, list, table, vector, env, there) with the effect methods listed in 4.2 and the per-type semantics in 4.4 / list / string / number.
-5. Implement vector calling with parser specifier (`$name`, `$$name`, `*`, regex, `$env`, arity-via-number).
-6. Implement `_`, `||`, `~`, `:` (constructor with optional `?` no-cache), `=`, `=>`, `mode`, `...`, `<<`, `>>`, `@`.
-7. Implement iteration over numbers, lists, sequences, ranges (numeric and alpha, with optional step), strings (IO ask), tables (rows as resources).
-8. Implement template interpolation via a JS host (`new Function`).
-9. Implement resource prompting (`_resourceCheck` + `defaultInput`).
-10. Implement module loading per 8.
-11. Implement the history mode (mode flag opt-in).
-12. Pass every assertion in `test/`.
-13. Run the `examples/*.th` files without errors and produce the documented results.
+5. Implement vector calling with parser specifier (`$name`, `$$name`, `*`, regex, `$env`, arity-via-number), call-site specs, and callable-result chaining (4.3).
+6. Implement `_`, `||`, `~`, `:` (constructor with optional `?` no-cache, honoring its parser spec), `=`, `=>`, `mode`, `...` (continuations on operators *and* named vectors), `<<`, `>>`, `@`.
+7. Implement iteration over numbers, lists, sequences/enumerations, ranges (numeric and alpha, with optional step), strings (IO ask), tables (rows as resources).
+8. Implement template interpolation via a JS host (`new Function`), expression and statement-body forms.
+9. Implement resource prompting (`resourceCheck` + `defaultInput`).
+10. Implement module loading per 8 (relative dir, then built-in `src/modules/`).
+11. Implement history mode commands `repeat` / `undo` / `redo` / `learn` / `forget` / `start` / `stop` (mode flag opt-in; see 4.15).
+12. Implement type conversions `number` / `string` / `element` / `list` / `sequence` / `block` / `scope` (see 6.1).
+13. Implement inline facet blocks (see 13).
+14. Pass every assertion in `test/`.
+15. Run the `examples/*.th` files without errors and produce the documented results.
 
 End of specification.

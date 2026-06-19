@@ -23,12 +23,15 @@ there + hero;
 there + dragon;
 there + wizard;
 
-60 _ { hero   + healthy };
-60 _ { dragon + healthy };
-$rand 3 _ { hero   + weak };
-$rand 3 _ { hero   + charming };
-$rand 3 _ { dragon + weak };
-$rand 3 _ { dragon + charming };
+init = {
+    60 _ { $me   + healthy } ($me{$el});
+    $rand 3 _ { $me + weak } ($me{$el});
+    $rand 3 _ { $me + charming } ($me{$el});
+}
+
+hero init;
+dragon init;
+
 
 # --- atomic effects ---
 
@@ -53,33 +56,40 @@ $rand 3 _ { dragon + charming };
 
 rolls = {
     $rand 10 _ { $me + powerful } ($me{$el});
-    '' + $el + ' rolled ' + ($el ? powerful) $print;
+    '' + $el + ' rolled ' + ($el ? powerful) + ' to attack' $print;
 };
+
+potion = {
+    $rand 5 _ { $me + powerful } ($me{$el});
+    '' + $el + ' has ' + ($el ? powerful) + ' potions for ' + $patient $print;
+} ($patient);
 
 attacking = {
     $el rolls;
-    ($el ? powerful) _ {
-        $opp + attacked;
+    $el ? powerful _ {
+        $opponent + attacked;
         $me  - powerful;
-    } ($opp{$opp} $me{$el});
-} ($opp);
+    } ($opponent{$opponent} $me{$el});
+} ($opponent);
 
 healing = {
-    $el rolls;
-    ($el ? powerful) _ {
-        $pat + mended;
+    $el potion $patient;
+    $el ? powerful _ {
+        $patient + mended;
         $me  - powerful;
-    } ($pat{$pat} $me{$el});
-} ($pat);
+    } ($patient{$patient} $me{$el});
+} ($patient);
 
 bleeding = {
     $el ?! dead _ {
-        ($el ? weak) _ { $el + attacked } ($el{$el});
+        $el ? weak _ { $me + attacked } ($me{$el});
     };
+    '' + $el + ' bleeds ' + ($el ? weak) $print;
 };
 
 recovering = {
-    ($el ? charming) _ { $el + mended } ($el{$el});
+    $el ? charming _ { $me + mended } ($me{$el});
+    '' + $el + ' sneaks ' + ($el ? charming) + ' more potions' $print;
 };
 
 showStatus = {
@@ -89,17 +99,17 @@ showStatus = {
 # --- the game loop ---
 
 playTurn = {
-    (hero ? healthy) _ {
-        (dragon ? healthy) _ {
+    hero ?! dead _ {
+        dragon ?! dead _ {
             '\nPress enter to take a turn (or type quit): ' _ {
                 $el ? 'quit' _ { 'You flee the field.' $print } || {
                     hero attacking dragon;
                     dragon attacking hero;
-                    wizard healing hero;
-                    wizard healing dragon;
                     hero bleeding;
                     dragon bleeding;
+                    wizard healing hero;
                     hero recovering;
+                    wizard healing dragon;
                     dragon recovering;
                     showStatus;
                     playTurn;

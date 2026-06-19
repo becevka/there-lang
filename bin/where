@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Test runner: runs a test.th (or a directory's test.th) in the where facet.
+# Usage: bin/where <test.th | dir>
+set -e
+DIR="$(cd "$(dirname "$0")/.." && pwd)"
+exec bun run "$DIR/src/cli/there.ts" --where "$@"

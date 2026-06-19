@@ -7,14 +7,15 @@
 # Stats are multisets: every `healthy` state is one health unit, every
 # `weak` state is one point of frailty. Mutation is just `is` / `is not`
 # from the default facet. Continuations carry the physics.
+#
+# Where canonical.th uses explicit closure parser specs `($x{$x} $y{$z})`,
+# this version relies on lexical scoping: resources in a vector's body
+# inherit from the defining env's resources via the parent chain, so
+# `$el`, `$opponent` etc. resolve to the outer bindings without an
+# explicit capture step.
 
 ```facet
 resources = {
-    # $rand N -> a number in 1..N. The template body is plain JS — the
-    # one host-language escape this file needs. `parameters`, `source`,
-    # and `there` are bound by the facet loader, same as in a JS facet
-    # config. Until a safe declarative subset lands (SPEC.md § 13.4),
-    # the template is the inline form for `resources` and `globals`.
     rand : `${
         var max = Number(parameters[0] && parameters[0].value());
         return there.create('number', Math.floor(Math.random() * max) + 1);
@@ -22,15 +23,9 @@ resources = {
 }
 
 phrases = {
-    # structural sugar — `does` is just `=` (a plain vector definition).
-    # Forked envs already inherit `properties` from the parent, so there
-    # is no need to globalize with `=>`.
     '$ does $'                    : '$1 = $2'
     'otherwise $'                 : '|| $1'
 
-    # postfix queries — `hero healthy?` is just `hero is? healthy`
-    # (= count of `healthy` states on hero). Wrapped in parens so it
-    # composes cleanly inside `+` chains and as a `_` source.
     '$ healthy?'                  : '($1 is? healthy)'
     '$ weak?'                     : '($1 is? weak)'
     '$ charming?'                 : '($1 is? charming)'
@@ -40,10 +35,8 @@ phrases = {
     '$ dead?'                     : '($1 is? dead)'
     '$ is alive'                  : '$1 is?! dead'
 
-    # storytelling action phrases — pure surface, no new behavior
     'the hero rolls'              : 'hero rolls'
     'the dragon rolls'            : 'dragon rolls'
-    'the wizard rolls'            : 'wizard rolls'
     'the hero attacks the dragon' : 'hero attacking dragon'
     'the dragon attacks the hero' : 'dragon attacking hero'
     'the wizard heals the hero'   : 'wizard healing hero'
@@ -62,78 +55,77 @@ there is hero;
 there is dragon;
 there is wizard;
 
-60 _ { hero   is healthy };
-60 _ { dragon is healthy };
+init does {
+    60 _ { $el is healthy };
+    $rand 3 _ { $el is weak };
+    $rand 3 _ { $el is charming };
+};
 
-$rand 3 _ { hero   is weak };
-$rand 3 _ { hero   is charming };
-$rand 3 _ { dragon is weak };
-$rand 3 _ { dragon is charming };
+hero init;
+dragon init;
 
 # --- atomic effects (continuations on a trigger state) ---
-#
-# `attacked` and `mended` are *effects*: anything that lands either of
-# them on an element gets translated into a healthy-token change. The
-# trigger state itself is cleared so it does not accumulate debris.
 
 (* attacked) ... { $el is not healthy; $el is not attacked };
 (* mended)   ... { $el is     healthy; $el is not mended  };
 
 # --- physics: threshold markers track wounded / dying / dead ---
 
-# when a `healthy` is removed, pin the marker for the band just entered
 (- * healthy) ... {
-    $el healthy? == 40 _ { $me is wounded } ($me{$el});
-    $el healthy? == 20 _ { $me is dying   } ($me{$el});
-    $el healthy? ==  0 _ { $me is dead    } ($me{$el});
+    $el healthy? == 40 _ { $el is wounded };
+    $el healthy? == 20 _ { $el is dying   };
+    $el healthy? ==  0 _ { $el is dead    };
 };
 
-# when a `healthy` is restored, peel the marker back off
 (+ * healthy) ... {
-    $el healthy? == 41 _ { $me is not wounded } ($me{$el});
-    $el healthy? == 21 _ { $me is not dying   } ($me{$el});
-    $el healthy? ==  1 _ { $me is not dead    } ($me{$el});
+    $el healthy? == 41 _ { $el is not wounded };
+    $el healthy? == 21 _ { $el is not dying   };
+    $el healthy? ==  1 _ { $el is not dead    };
 };
 
 # --- verbs ---
 
-# roll fresh power for the turn
 rolls does {
-    $rand 10 _ { $me is powerful } ($me{$el});
-    '' + $el + ' rolled ' + $el powerful? $print;
+    $rand 10 _ { $el is powerful };
+    '' + $el + ' rolled ' + $el powerful? + ' to attack' $print;
 };
 
+potion does {
+    $rand 5 _ { $el is powerful };
+    '' + $el + ' has ' + $el powerful? + ' potions for ' + $patient $print;
+} ($patient);
+
 # attack: every point of power lands one hit on the opponent and is
-# spent in the same step, so we leave the turn with zero left.
+# spent in the same step.
 attacking does {
     $el rolls;
     $el powerful? _ {
-        $opp is attacked;
-        $me  is not powerful;
-    } ($opp{$opp} $me{$el});
-} ($opp);
+        $opponent is attacked;
+        $el is not powerful;
+    };
+} ($opponent);
 
 healing does {
-    $el rolls;
+    $el potion $patient;
     $el powerful? _ {
-        $pat is mended;
-        $me  is not powerful;
-    } ($pat{$pat} $me{$el});
-} ($pat);
+        $patient is mended;
+        $el is not powerful;
+    };
+} ($patient);
 
-# end-of-turn traits — applied once per turn, not per action.
-# bleeding: an alive actor takes one hit per point of `weak`. A corpse
-# does not bleed.
+# bleeding: an alive actor takes one hit per point of `weak`.
+# A corpse does not bleed.
 bleeding does {
     $el is alive _ {
-        $el weak? _ { $el is attacked } ($el{$el});
+        $el weak? _ { $el is attacked };
     };
+    '' + $el + ' bleeds ' + $el weak? $print;
 };
 
 # recovering: charming pulls one healthy back per point, every turn.
-# Allowed on the fallen — that is what makes a wizard a wizard.
 recovering does {
-    $el charming? _ { $el is mended } ($el{$el});
+    $el charming? _ { $el is mended };
+    '' + $el + ' sneaks ' + $el charming? + ' more potions' $print;
 };
 
 showStatus does {
@@ -143,18 +135,18 @@ showStatus does {
 # --- the game loop ---
 
 playTurn does {
-    hero healthy? _ {
-        dragon healthy? _ {
+    hero is alive _ {
+        dragon is alive _ {
             '\nPress enter to take a turn (or type quit): ' _ {
                 $el is? 'quit' _ { 'You flee the field.' $print }
                 otherwise {
                     the hero attacks the dragon;
                     the dragon attacks the hero;
-                    the wizard heals the hero;
-                    the wizard heals the dragon;
                     the hero bleeds;
                     the dragon bleeds;
+                    the wizard heals the hero;
                     the hero recovers;
+                    the wizard heals the dragon;
                     the dragon recovers;
                     show the status;
                     playTurn;

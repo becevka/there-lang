@@ -1,6 +1,10 @@
 MIT License
 
-Copyright (c) 2026 Wolfgang Basyuk
+Copyright (c) 2015, 2026 Wolfgang Basyuk
+
+Originally implemented in 2015 by Wolfgang Basyuk; reimplemented in 2026
+with Claude (Anthropic) from the descriptions in PROMO.md, SPEC.md, and
+REIMPLEMENTATION.md.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

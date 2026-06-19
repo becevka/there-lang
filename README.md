@@ -1,5 +1,25 @@
+# there
 
+A small language where the program reads like sentences, effects are
+first-class, and the grammar itself is something you write. Implemented in
+TypeScript on Bun.
 
+## Running
+
+```sh
+bun src/cli/there.ts <file.th>        # run a program (a dir loads its index.th)
+bun src/cli/there.ts                   # REPL (help / clear / silence / exit)
+bun src/cli/there.ts --where <test>    # run a test suite in the `where` facet
+bun src/cli/there.ts --ast <file.th>   # pretty-print the parsed AST
+bun test                               # unit + example integration tests
+```
+
+The `bin/there` and `bin/where` shims wrap these for use on `PATH`.
+
+Worked, runnable programs live in `examples/` — start with
+`examples/promo/natural.th` (storytelling phrases, continuations, an inline
+`facet` block) and its plain-spelled twin `examples/promo/canonical.th`.
+`SPEC.md` is the authoritative language reference.
 
 ## Main syntax formula
 

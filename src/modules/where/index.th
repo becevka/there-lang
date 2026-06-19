@@ -1,0 +1,55 @@
+# where — the test facet. `'name' > { body }` registers a test, `should`
+# asserts equality, `all` runs every test and reports. `only` / `skip`
+# prefix a registration to focus or exclude it. About as small as a test
+# framework gets — every line is plain there.
+
+```facet
+phrases = {
+    '$ should be $' : '$1 should $2'
+    '$ should eq $' : '$1 should $2'
+}
+```
+
+tests = |name block tag|;
+passes = 0;
+failures = 0;
+mark = '';
+
+only => { mark is 'only' } (0);
+skip => { mark is 'skip' } (0);
+
+> => {
+    tests + [$el $1 mark];
+    mark - mark;
+};
+
+should => {
+    $el == $1 _ { passes + 1; '  ok' $print }
+    || {
+        failures + 1;
+        '  FAIL: expected [' + $1 + '] got [' + $el + ']' $error;
+    };
+};
+
+result => {
+    '' + passes + ' passed, ' + failures + ' failed' $print;
+};
+
+all => {
+    onlyRows = (tests * [* * 'only']);
+    onlyCount = (onlyRows ? size);
+    tests _ {
+        onlyCount == 0 _ {
+            $tag == 'skip' _ { '- ' + $name + ' (skipped)' $print }
+            || { '> ' + $name $print; $block };
+        } || {
+            $tag == 'only' _ { '> ' + $name $print; $block };
+        };
+    };
+    result;
+};
+
+one => {
+    tests _ { '> ' + $name $print; $block };
+    result;
+};

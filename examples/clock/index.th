@@ -1,25 +1,29 @@
+# A clock that renders as HH:MM and wraps around midnight. A clock value is
+# a number of minutes carrying a lazy `~` renderer, so `==` compares the
+# rendered time and `+` / `-` (add / remove) move it by minutes.
+
+clockOf => {
+    base = (((($total % 1440) + 1440) % 1440));
+    base ~ {
+        m << $el;
+        `${
+            var t = ((Number(m) % 1440) + 1440) % 1440;
+            var h = Math.floor(t / 60);
+            var mm = t % 60;
+            return (h < 10 ? '0' : '') + h + ':' + (mm < 10 ? '0' : '') + mm;
+        }`;
+    };
+    base
+} ($total);
+
 at => {
-
-  ~ {
-    h << $hours;
-    m << $minutes;
-    timeString = `${var d = new Date(0); d.setHours(h); d.setMinutes(m); return d.toString().split('T')[1].substring(0, 5);}`;
-    timeString $print;
-    timeString;
-  };
-
+    clockOf ((($hours * 60) + $minutes))
 } ($hours $minutes);
 
 plus => {
-    (min) : {1000 * 60};
-    (m) : {$num * min};
-    $el . time + m;
-    $el . time;
+    clockOf (($el + $num))
 } ($num);
 
-minus =>  {
-    (min) : {1000 * 60};
-    (m) : {$num * min};
-    $el . time - m;
-    $el . time;
+minus => {
+    clockOf (($el - $num))
 } ($num);

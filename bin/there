@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Thin shim that runs the there CLI under bun.
+# Usage: bin/there <file.th> [args...]
+set -e
+DIR="$(cd "$(dirname "$0")/.." && pwd)"
+exec bun run "$DIR/src/cli/there.ts" "$@"
