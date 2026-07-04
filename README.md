@@ -4,6 +4,21 @@ A small language where the program reads like sentences, effects are
 first-class, and the grammar itself is something you write. Implemented in
 TypeScript on Bun.
 
+```th
+there is apple;
+apple is red;
+apple is? red $print;     # 1
+
+(rotten) ... { $el is brown };
+apple is rotten;
+apple is? brown $print;   # 1
+```
+
+That second block isn't a callback or a subscription. It's a
+*continuation*: a rule the runtime evaluates whenever the named effect
+happens, on whichever element matches. No event bus, no observer pattern,
+no decorators — the language has one. See `PROMO.md` for the full pitch.
+
 ## Running
 
 ```sh
@@ -14,90 +29,140 @@ bun src/cli/there.ts --ast <file.th>   # pretty-print the parsed AST
 bun test                               # unit + example integration tests
 ```
 
-The `bin/there` and `bin/where` shims wrap these for use on `PATH`.
+`bin/there`, `bin/where`, and `bin/therepile` wrap the run / test / AST
+forms above for use on `PATH`.
 
-Worked, runnable programs live in `examples/` — start with
-`examples/promo/natural.th` (storytelling phrases, continuations, an inline
-`facet` block) and its plain-spelled twin `examples/promo/canonical.th`.
-`SPEC.md` is the authoritative language reference.
+## Examples
+
+Worked, runnable programs live in `examples/`:
+
+- `examples/promo/` — a turn-based duel, written twice: `natural.th` reads
+  like storytelling phrases (with an inline `facet` block defining its own
+  vocabulary), `canonical.th` is the same program spelled with plain
+  operators. Start here — `examples/promo/README.md` walks through both.
+- `examples/anagram/` — finds anagram candidates in a word list.
+- `examples/clock/` — a wraparound HH:MM clock built on a lazy `~` renderer.
+- `examples/fizzbuzz.th` — the classic, in `there`.
+- `examples/lang-features.th`, `examples/lang-steps.th` — small syntax
+  demonstrations.
+
+Each directory-based example also has a `test.th`, runnable via
+`bin/where examples/<name>`.
+
+## Documentation
+
+- `PROMO.md` — the pitch: what makes `there` different, with runnable
+  snippets.
+- `SPEC.md` — the authoritative language reference (lexical structure,
+  runtime model, evaluation algorithm, standard surface).
+- `REIMPLEMENTATION.md` — notes from porting the original implementation to
+  this TypeScript/Bun codebase.
 
 ## Main syntax formula
 
- ```generator processor (collector) (parameters) (=> reducer);```
+Every statement follows one shape:
 
-#### Example 1
+```
+generator processor (collector) (parameters) (=> reducer)
+```
 
- ```there is apple;```
+- **generator** sets up an environment or selects an element.
+- **processor** does something to it.
+- **collector** describes how parameters are gathered.
+- **parameters** are the typed inputs the processor expects.
+- **reducer** optionally names or globalizes the result.
 
- **there** - is a a by type generator which initializes environment for which processor will process collected parameters
- 
- **is**  - is a processor which process what was collected on the environment
- 
- **apple** - is simple parameter, automatically collected, collector is omitted
- 
- **reducer** is omitted in this case as well
+#### Example 1: the bare form
 
-#### Example 2
+```th
+there is apple;
+```
 
-```(apple) {age add $years} ($years:number) => makeOlder;```
+**there** is a by-type generator: it initializes an environment for
+`apple` to be processed in. **is** is the processor that acts on what was
+collected. **apple** is a simple parameter, collected automatically, so
+the collector and reducer are both omitted.
 
- **(apple)** - is a a by word generator which will be used to check environment for which processor will process collected parameters
- 
- **{age add $years}**  - is a definition of processor which process what was collected on the environment
- 
- **($years:number)** - is parameters collector which defines type of parameter, parameter is omitted, processor is not run
- 
- **=> makeOlder** -  reducer which will store processor under name makeOlder
+#### Example 2: the full form
 
- Effectively, now we can call it
+```th
+(apple) {age add $years} ($years:number) => makeOlder;
+```
 
- ```
- there is apple;
- apple has age;
- apple age is 0;
- apple makeOlder 12;
- apple age => $print;
- apple makeOlder "12"; #will not be called
- ```
+**(apple)** is a by-word generator: it checks the environment for
+elements matching `apple` before the processor runs. **{age add $years}**
+is the processor body. **($years:number)** is the parameter collector; it
+types `$years` as a number and is *not* itself run. **=> makeOlder**
+stores the whole processor under the name `makeOlder`.
 
-#### Example 3
+```th
+there is apple;
+apple has age;
+apple age is 0;
+apple makeOlder 12;
+apple age => $print;
+apple makeOlder "12";      # not called: "12" is a string, not a number
+```
 
- ```(apple) {age add $years} (for $years:number years) => grew;```
+#### Example 3: extra words and optional pieces
 
- **(for $years:number)** - is parameters collector which defines type of parameter an also specifies extra word which will be parsed but not taken into account
+```th
+(apple) {age add $years} (for $years:number years) => grew;
+```
 
- Effectively, now we can say
+`for` and `years` are literal words the collector expects around the
+typed parameter — parsed, but not captured.
 
- ```
- apple grew for 12 years;
- apple grew 12 years; #will not be called
- ```
+```th
+apple grew for 12 years;
+apple grew 12 years;       # not called: "for" and "years" are required
+```
 
- ```(apple) {age add $years} ([for|] $years:number years) => grew;```
+Wrapping a word in `[...|]` makes it optional:
 
- using simple regex we can make some words optional, so now
- `apple grew 12 years;`will work
+```th
+(apple) {age add $years} ([for|] $years:number years) => grew;
+```
 
-```(apple) {age add $years} ([for|] $years:?number [years|]) => grew;```
+```th
+apple grew 12 years;       # now works: "for" is optional
+```
 
- using **?** with type we can make parameter optional, so now `apple grew;` will work but apple age will be not changed because calling ```add ?``` skips modification
+Adding `?` to the type makes the *parameter itself* optional:
 
+```th
+(apple) {age add $years} ([for|] $years:?number [years|]) => grew;
+```
 
-
+```th
+apple grew;                # works, but age is unchanged: `add ?` is a no-op
+```
 
 ## Types
 
- **element** - is the most basic type, it is abstract and it does not available by itself, we can say that spaces between words or semicolon are elements, but it is better to name them punctuations or syntactical elements
- 
- **word** - is the very popular thing, actually it is named element, when we say `apple;` we use word **apple** to generate access to apple type
- 
- **metatype** - is word with type of itself, when we say `apple;` we actually turn word **apple** into metatype apple. 
- Compare `apple is green` and `(apple) is green`, in the first case we access metatype apple and in second we create generator
- 
- **value** - is metatype with value property. For example, `12` is number metatype with value 12. If we specify `12 => a`. There is difference between **12** and **a**, since **12** is value, but **a** is metatype, actually it is an object, but we will get to it later
- 
- **number** - is value with numeric value property, defined using integer or decimal numbers, eg. `12, 13.4`
+- **element** — the most basic type. It's abstract and never appears by
+  itself; spaces and semicolons are elements too, though it's more useful
+  to call those punctuation.
+- **word** — a token that isn't yet resolved to a metatype. When you write
+  `apple;`, the word `apple` is what generates access to the `apple`
+  metatype.
+- **metatype** — a word bound to a type of itself. Writing `apple;` turns
+  the word `apple` into the metatype `apple`. Compare `apple is green`
+  (accesses the metatype `apple`) with `(apple) is green` (creates a
+  generator instead).
+- **value** — a metatype with a `value` property. `12` is a `number`
+  metatype whose value is `12`. Given `12 => a`, `12` is a value but `a`
+  is a metatype (an object) bound to it.
+- **number** — a value with a numeric `value`, written as an integer or
+  decimal: `12`, `13.4`.
+- **string** — a value with a string `value`, written in single or double
+  quotes: `"this is a string"`, `'this is also a string'`.
+- **block** — `{ ... }`, a lazily-parsed body that evaluates to a
+  *vector*: a callable. Calling it runs its body in a fresh environment
+  and returns the result (or its accumulated `returns`, if any). A block
+  followed by `(...)` attaches a parameter collector to it, as in the
+  examples above.
 
- **string** - is value with string value property, defined using text in single or double quotes, eg. `"this is string", 'this is also string'`
- 
- **block**
+## License
+
+MIT — see `LICENSE`.
